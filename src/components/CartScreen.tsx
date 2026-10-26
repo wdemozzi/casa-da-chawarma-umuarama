@@ -69,8 +69,107 @@ export const CartScreen: React.FC<CartScreenProps> = ({
     'pix_entrega' | 'cartao_entrega' | 'dinheiro_entrega' | 'pix_balcao' | 'cartao_balcao' | 'dinheiro_balcao'
   >('pix_entrega');
   const [changeFor, setChangeFor] = useState('');
+  
+  // Validation State
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Brazilian Phone Mask helper: (XX) XXXXX-XXXX or (XX) XXXX-XXXX
+  const handlePhoneChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    let formatted = digits;
+    if (digits.length > 2) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    }
+    if (digits.length > 7) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    }
+    setPhone(formatted);
+    if (fieldErrors.phone) {
+      setFieldErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.phone;
+        return copy;
+      });
+    }
+  };
+
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        return copy;
+      });
+    }
+    if (errorMessage) setErrorMessage('');
+  };
+
+  const validateOrder = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // 1. Customer Name Validation
+    const cleanName = customerName.trim();
+    if (!cleanName) {
+      errors.customerName = 'Informe seu nome completo';
+    } else if (cleanName.length < 3) {
+      errors.customerName = 'O nome deve ter no mínimo 3 letras';
+    } else if (/^\d+$/.test(cleanName)) {
+      errors.customerName = 'O nome não pode ser composto apenas por números';
+    }
+
+    // 2. Phone Validation
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (orderType === 'delivery') {
+      if (!phoneDigits) {
+        errors.phone = 'Telefone/WhatsApp é obrigatório para a entrega';
+      } else if (phoneDigits.length < 10) {
+        errors.phone = 'Telefone incompleto com DDD (mínimo 10 dígitos)';
+      }
+    } else if (phoneDigits && phoneDigits.length < 10) {
+      errors.phone = 'Telefone incompleto com DDD (mínimo 10 dígitos)';
+    }
+
+    // 3. Delivery Address Validation
+    if (orderType === 'delivery') {
+      if (!street.trim()) {
+        errors.street = 'Informe a Rua / Avenida';
+      } else if (street.trim().length < 3) {
+        errors.street = 'Nome da rua muito curto (mínimo 3 letras)';
+      }
+
+      if (!number.trim()) {
+        errors.number = 'Informe o número ou "S/N"';
+      }
+
+      if (!neighborhood.trim()) {
+        errors.neighborhood = 'Informe o Bairro';
+      } else if (neighborhood.trim().length < 2) {
+        errors.neighborhood = 'Nome do bairro muito curto';
+      }
+    }
+
+    // 4. Change (Troco) Validation
+    if (paymentMethod === 'dinheiro_entrega' && changeFor.trim()) {
+      const parsedChange = parseFloat(changeFor.replace(/[^\d,.]/g, '').replace(',', '.'));
+      const totalReais = totalCents / 100;
+      if (!isNaN(parsedChange) && parsedChange <= totalReais) {
+        errors.changeFor = `O valor para troco (R$ ${parsedChange.toFixed(2)}) deve ser maior que o total do pedido (${formatBRL(totalCents)})`;
+      }
+    }
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0];
+      setErrorMessage(firstError);
+      return false;
+    }
+
+    setErrorMessage('');
+    return true;
+  };
 
   const handleFinishOrder = () => {
     if (items.length === 0) return;
@@ -81,28 +180,12 @@ export const CartScreen: React.FC<CartScreenProps> = ({
       return;
     }
 
-    // Validation
-    if (!customerName.trim()) {
-      setErrorMessage('Por favor, informe seu nome para identificar o pedido.');
+    // Perform full data validation
+    if (!validateOrder()) {
+      sounds.playCrispClick();
       return;
     }
 
-    if (orderType === 'delivery') {
-      if (!street.trim()) {
-        setErrorMessage('Por favor, informe o nome da Rua/Avenida para a entrega.');
-        return;
-      }
-      if (!number.trim()) {
-        setErrorMessage('Por favor, informe o número da residência (ou "S/N").');
-        return;
-      }
-      if (!neighborhood.trim()) {
-        setErrorMessage('Por favor, informe o seu Bairro.');
-        return;
-      }
-    }
-
-    setErrorMessage('');
     sounds.playCelebration();
     setIsSubmitting(true);
 
@@ -352,34 +435,59 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         {/* Informações Pessoais */}
         <div className="space-y-2.5">
           <div className="space-y-1">
-            <label className="text-[11px] text-gray-300 block font-medium">
-              {orderType === 'delivery' ? 'Seu Nome Completo:' : 'Nome para Retirada no Balcão:'} <span className="text-red-400">*</span>
-            </label>
+            <div className="flex justify-between items-center">
+              <label className="text-[11px] text-gray-300 block font-medium">
+                {orderType === 'delivery' ? 'Seu Nome Completo:' : 'Nome para Retirada no Balcão:'} <span className="text-red-400">*</span>
+              </label>
+              {fieldErrors.customerName && (
+                <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {fieldErrors.customerName}
+                </span>
+              )}
+            </div>
             <input
               type="text"
               value={customerName}
               onChange={(e) => {
                 setCustomerName(e.target.value);
-                if (errorMessage) setErrorMessage('');
+                clearFieldError('customerName');
               }}
               placeholder="Ex: João da Silva"
-              className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2.5 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+              className={`w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2.5 border transition outline-none ${
+                fieldErrors.customerName
+                  ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                  : 'border-chawarma-border focus:border-chawarma-gold'
+              }`}
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] text-gray-300 block font-medium">
-              WhatsApp / Telefone para Contato:
-            </label>
+            <div className="flex justify-between items-center">
+              <label className="text-[11px] text-gray-300 block font-medium">
+                WhatsApp / Telefone para Contato: {orderType === 'delivery' && <span className="text-red-400">*</span>}
+              </label>
+              {fieldErrors.phone && (
+                <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {fieldErrors.phone}
+                </span>
+              )}
+            </div>
             <div className="relative">
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => handlePhoneChange(e.target.value)}
                 placeholder="Ex: (44) 99999-8888"
-                className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl pl-9 pr-3 py-2.5 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+                maxLength={15}
+                className={`w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl pl-9 pr-3 py-2.5 border transition font-mono outline-none ${
+                  fieldErrors.phone
+                    ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                    : 'border-chawarma-border focus:border-chawarma-gold'
+                }`}
               />
-              <PhoneIcon className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+              <PhoneIcon className={`w-4 h-4 absolute left-3 top-2.5 ${fieldErrors.phone ? 'text-red-400' : 'text-gray-500'}`} />
             </div>
           </div>
         </div>
@@ -402,11 +510,18 @@ export const CartScreen: React.FC<CartScreenProps> = ({
                   value={street}
                   onChange={(e) => {
                     setStreet(e.target.value);
-                    if (errorMessage) setErrorMessage('');
+                    clearFieldError('street');
                   }}
                   placeholder="Ex: Av. Paraná"
-                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+                  className={`w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border transition outline-none ${
+                    fieldErrors.street
+                      ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                      : 'border-chawarma-border focus:border-chawarma-gold'
+                  }`}
                 />
+                {fieldErrors.street && (
+                  <p className="text-[9px] text-red-400 font-semibold">{fieldErrors.street}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -418,11 +533,18 @@ export const CartScreen: React.FC<CartScreenProps> = ({
                   value={number}
                   onChange={(e) => {
                     setNumber(e.target.value);
-                    if (errorMessage) setErrorMessage('');
+                    clearFieldError('number');
                   }}
                   placeholder="Ex: 1234"
-                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+                  className={`w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border transition font-mono outline-none ${
+                    fieldErrors.number
+                      ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                      : 'border-chawarma-border focus:border-chawarma-gold'
+                  }`}
                 />
+                {fieldErrors.number && (
+                  <p className="text-[9px] text-red-400 font-semibold">{fieldErrors.number}</p>
+                )}
               </div>
             </div>
 
@@ -436,11 +558,18 @@ export const CartScreen: React.FC<CartScreenProps> = ({
                   value={neighborhood}
                   onChange={(e) => {
                     setNeighborhood(e.target.value);
-                    if (errorMessage) setErrorMessage('');
+                    clearFieldError('neighborhood');
                   }}
                   placeholder="Ex: Centro / Zona 2"
-                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+                  className={`w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border transition outline-none ${
+                    fieldErrors.neighborhood
+                      ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                      : 'border-chawarma-border focus:border-chawarma-gold'
+                  }`}
                 />
+                {fieldErrors.neighborhood && (
+                  <p className="text-[9px] text-red-400 font-semibold">{fieldErrors.neighborhood}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -496,7 +625,10 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => setPaymentMethod('pix_entrega')}
+                onClick={() => {
+                  setPaymentMethod('pix_entrega');
+                  clearFieldError('changeFor');
+                }}
                 className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
                   paymentMethod === 'pix_entrega'
                     ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
@@ -509,7 +641,10 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
               <button
                 type="button"
-                onClick={() => setPaymentMethod('cartao_entrega')}
+                onClick={() => {
+                  setPaymentMethod('cartao_entrega');
+                  clearFieldError('changeFor');
+                }}
                 className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
                   paymentMethod === 'cartao_entrega'
                     ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
@@ -579,22 +714,40 @@ export const CartScreen: React.FC<CartScreenProps> = ({
           {/* Campo de Troco caso pague em dinheiro na entrega */}
           {paymentMethod === 'dinheiro_entrega' && (
             <div className="p-3 bg-[#1a1a24] rounded-xl border border-chawarma-border/80 space-y-2 mt-2">
-              <label className="text-[11px] text-gray-300 block font-medium">
-                Precisa de troco para quanto? (Deixe em branco se tiver o valor exato)
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] text-gray-300 block font-medium">
+                  Precisa de troco para quanto? (Deixe em branco se tiver o valor exato)
+                </label>
+              </div>
               <input
                 type="text"
                 value={changeFor}
-                onChange={(e) => setChangeFor(e.target.value)}
+                onChange={(e) => {
+                  setChangeFor(e.target.value);
+                  clearFieldError('changeFor');
+                }}
                 placeholder="Ex: R$ 50,00 ou R$ 100,00"
-                className="w-full bg-[#14141c] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+                className={`w-full bg-[#14141c] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border transition font-mono outline-none ${
+                  fieldErrors.changeFor
+                    ? 'border-red-500/80 bg-red-950/20 focus:border-red-500'
+                    : 'border-chawarma-border focus:border-chawarma-gold'
+                }`}
               />
-              <div className="flex gap-1.5">
+              {fieldErrors.changeFor && (
+                <p className="text-[10px] text-red-400 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {fieldErrors.changeFor}
+                </p>
+              )}
+              <div className="flex gap-1.5 pt-1">
                 {['Não preciso de troco', 'R$ 50,00', 'R$ 100,00'].map((sug) => (
                   <button
                     key={sug}
                     type="button"
-                    onClick={() => setChangeFor(sug === 'Não preciso de troco' ? '' : sug)}
+                    onClick={() => {
+                      setChangeFor(sug === 'Não preciso de troco' ? '' : sug);
+                      clearFieldError('changeFor');
+                    }}
                     className="text-[10px] px-2 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 text-gray-300 hover:text-amber-300 border border-white/10 transition"
                   >
                     {sug}
@@ -621,7 +774,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
         {/* Alerta de Validação */}
         {errorMessage && (
-          <div className="p-3 bg-red-950/70 border border-red-500/60 rounded-xl flex items-center gap-2 text-red-300 text-xs font-semibold animate-pulse">
+          <div className="p-3 bg-red-950/70 border border-red-500/60 rounded-xl flex items-center gap-2 text-red-300 text-xs font-semibold animate-shake">
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
             <span>{errorMessage}</span>
           </div>

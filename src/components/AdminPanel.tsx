@@ -19,6 +19,7 @@ import {
   Star,
   Gift,
   Percent,
+  AlertCircle,
 } from 'lucide-react';
 import { useMenu } from '../contexts/MenuContext';
 import { Product, Category, ProductVariation, ProductAddon, WheelPrize } from '../types/menu';
@@ -72,6 +73,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   // Product Edit Modal State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [productFormError, setProductFormError] = useState('');
 
   // Form fields for editing/creating product
   const [formName, setFormName] = useState('');
@@ -119,6 +121,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   const openEditProduct = (prod: Product) => {
     setEditingProduct(prod);
     setIsCreatingProduct(false);
+    setProductFormError('');
     setFormName(prod.name);
     setFormCatId(prod.category_id);
     setFormPrice(prod.price_cents / 100);
@@ -137,6 +140,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   const openNewProduct = () => {
     setEditingProduct(null);
     setIsCreatingProduct(true);
+    setProductFormError('');
     setFormName('');
     setFormCatId(categories[0]?.id || '');
     setFormPrice(20);
@@ -161,8 +165,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   };
 
   const saveProductModal = () => {
-    const cents = Math.round(Number(formPrice) * 100);
-    if (!formName.trim() || isNaN(cents)) return;
+    // 1. Data Validation for Products
+    if (!formName.trim()) {
+      setProductFormError('O nome do produto é obrigatório.');
+      return;
+    }
+    if (formName.trim().length < 2) {
+      setProductFormError('O nome do produto deve ter no mínimo 2 caracteres.');
+      return;
+    }
+    if (!formCatId) {
+      setProductFormError('Selecione uma categoria para o produto.');
+      return;
+    }
+    const numPrice = Number(formPrice);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      setProductFormError('O preço deve ser um valor numérico válido maior que R$ 0,00.');
+      return;
+    }
+    if (formHasVariations) {
+      if (formVariations.length === 0) {
+        setProductFormError('Adicione ao menos uma variação ou desmarque a opção de variações.');
+        return;
+      }
+      for (const v of formVariations) {
+        if (!v.name.trim()) {
+          setProductFormError('Todas as variações cadastradas devem possuir um nome.');
+          return;
+        }
+        if (v.price_cents <= 0) {
+          setProductFormError(`A variação "${v.name}" deve ter um preço maior que zero.`);
+          return;
+        }
+      }
+    }
+
+    setProductFormError('');
+    const cents = Math.round(numPrice * 100);
 
     if (isCreatingProduct) {
       addProduct({
@@ -207,6 +246,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = settingsPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      alert('Validação: O número do WhatsApp deve conter DDD e telefone válidos (mínimo 10 dígitos). Ex: 44999998888');
+      return;
+    }
+    if (!settingsAddress.trim()) {
+      alert('Validação: O endereço do restaurante é obrigatório.');
+      return;
+    }
+    if (!settingsPin.trim() || settingsPin.trim().length < 4) {
+      alert('Validação: O PIN de segurança deve possuir pelo menos 4 caracteres.');
+      return;
+    }
+
     updateSettings({
       official_whatsapp: settingsPhone.trim(),
       address: settingsAddress.trim(),
@@ -228,6 +281,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
 
   const handleSaveWheel = (e: React.FormEvent) => {
     e.preventDefault();
+    // Validate each prize slice
+    for (let i = 0; i < wheelPrizes.length; i++) {
+      const p = wheelPrizes[i];
+      if (!p.label.trim()) {
+        alert(`Validação Roleta: A fatia #${i + 1} precisa ter um texto visível (ex: 5% OFF).`);
+        return;
+      }
+      if (!p.code.trim()) {
+        alert(`Validação Roleta: A fatia #${i + 1} precisa ter um código de cupom.`);
+        return;
+      }
+      if (p.discount_value <= 0) {
+        alert(`Validação Roleta: O desconto da fatia #${i + 1} deve ser maior que zero.`);
+        return;
+      }
+      if (p.discount_type === 'percent' && p.discount_value > 100) {
+        alert(`Validação Roleta: O percentual da fatia #${i + 1} não pode ultrapassar 100%.`);
+        return;
+      }
+    }
+
     updateSettings({
       wheel_enabled: wheelEnabled,
       wheel_prizes: wheelPrizes,
@@ -237,7 +311,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   };
 
   const handleResetDefaultWheel = () => {
-    if (confirm('Deseja restaurar as 6 fatias de desconto originais da roleta (R$ 3, 5%, R$ 5, 7%, R$ 7 e 10%)?')) {
+    if (confirm('Deseja restaurar as 6 fatias de desconto originais da roleta (5% e 10% OFF)?')) {
       setWheelPrizes(DEFAULT_WHEEL_PRIZES);
       updateSettings({
         wheel_prizes: DEFAULT_WHEEL_PRIZES,
@@ -249,7 +323,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
 
   const handleCreateCategory = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim()) return;
+    if (!newCatName.trim()) {
+      alert('Validação: Digite o nome da categoria que deseja adicionar.');
+      return;
+    }
+    if (newCatName.trim().length < 2) {
+      alert('Validação: O nome da categoria deve ter no mínimo 2 caracteres.');
+      return;
+    }
+
     addCategory({
       name: newCatName.trim(),
       slug: newCatName.toLowerCase().replace(/\s+/g, '-'),
@@ -1051,6 +1133,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
             </div>
 
             <div className="p-4 overflow-y-auto space-y-3 flex-1 text-xs">
+              {productFormError && (
+                <div className="p-3 bg-red-950/80 border border-red-500 rounded-xl text-red-300 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+                  <span>{productFormError}</span>
+                </div>
+              )}
               <div>
                 <label className="text-gray-400 block mb-1">Nome do Produto:</label>
                 <input
