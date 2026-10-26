@@ -59,7 +59,9 @@ export const menuStorage = {
           ...parsed,
           wheel_enabled: parsed.wheel_enabled !== undefined ? parsed.wheel_enabled : true,
           wheel_prizes:
-            parsed.wheel_prizes && parsed.wheel_prizes.length > 0
+            parsed.wheel_prizes &&
+            parsed.wheel_prizes.length === 6 &&
+            !parsed.wheel_prizes.some((p: any) => p.discount_type === 'fixed')
               ? parsed.wheel_prizes
               : INITIAL_SETTINGS.wheel_prizes,
         };
