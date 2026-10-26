@@ -53,6 +53,30 @@ export interface Category {
   is_active: boolean;
 }
 
+export interface WheelPrize {
+  id: string;
+  label: string; // Ex: 'R$ 5 OFF', '10% OFF'
+  title: string; // Ex: 'R$ 5,00 de Desconto no Pedido'
+  code: string;  // Ex: 'CHAWARMA-5OFF'
+  discount_type: 'fixed' | 'percent'; // 'fixed' = R$ (centavos), 'percent' = %
+  discount_value: number; // Ex: 500 para R$ 5,00 ou 10 para 10%
+  icon: string; // Ex: '🏷️', '⭐', '🔥', '🎉'
+  is_active: boolean;
+}
+
+export interface DeliveryDetails {
+  order_type: 'delivery' | 'pickup';
+  customer_name: string;
+  phone?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  complement?: string;
+  reference?: string;
+  payment_method: 'pix_entrega' | 'cartao_entrega' | 'dinheiro_entrega' | 'pix_balcao' | 'cartao_balcao' | 'dinheiro_balcao';
+  change_for?: string;
+}
+
 export interface RestaurantSettings {
   name: string;
   tagline: string;
@@ -64,6 +88,8 @@ export interface RestaurantSettings {
   instagram: string;
   banner_image_url: string;
   admin_pin: string; // PIN de acesso ao painel administrativo
+  wheel_enabled?: boolean;
+  wheel_prizes?: WheelPrize[];
 }
 
 export interface CartItem {
@@ -91,6 +117,7 @@ export interface OrderSubmission {
   subtotal_cents: number;
   total_cents: number;
   coupon?: Coupon;
+  delivery?: DeliveryDetails;
   notes?: string;
   created_at: string;
 }

@@ -1,4 +1,4 @@
-import { CartItem, Coupon } from '../types/menu';
+import { CartItem, Coupon, DeliveryDetails } from '../types/menu';
 import { formatBRL } from './currency';
 
 export function buildWhatsAppMessage(
@@ -7,7 +7,8 @@ export function buildWhatsAppMessage(
   subtotalCents: number,
   notes?: string,
   coupon?: Coupon | null,
-  discountCents: number = 0
+  discountCents: number = 0,
+  delivery?: DeliveryDetails
 ): string {
   let msg = `*NOVO PEDIDO - CASA DA CHAWARMA UMUARAMA*\n\n`;
 
@@ -16,6 +17,51 @@ export function buildWhatsAppMessage(
   }
   msg += `📅 *Data/Hora:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n`;
   msg += `─────────────────────────\n`;
+
+  if (delivery) {
+    if (delivery.order_type === 'delivery') {
+      msg += `🛵 *MODALIDADE: ENTREGA (DELIVERY)*\n`;
+      msg += `📍 *Endereço:* ${delivery.street || ''}, ${delivery.number || 'S/N'}\n`;
+      if (delivery.neighborhood) {
+        msg += `🏙️ *Bairro:* ${delivery.neighborhood}\n`;
+      }
+      if (delivery.complement) {
+        msg += `🏢 *Complemento:* ${delivery.complement}\n`;
+      }
+      if (delivery.reference) {
+        msg += `🧭 *Ponto de Ref:* ${delivery.reference}\n`;
+      }
+      if (delivery.phone) {
+        msg += `📞 *Tel/WhatsApp:* ${delivery.phone}\n`;
+      }
+
+      msg += `💳 *Pagamento na Entrega:* `;
+      if (delivery.payment_method === 'pix_entrega') {
+        msg += `📱 Pix na Entrega\n`;
+      } else if (delivery.payment_method === 'cartao_entrega') {
+        msg += `💳 Cartão Débito/Crédito (Levar maquininha)\n`;
+      } else if (delivery.payment_method === 'dinheiro_entrega') {
+        msg += `💵 Dinheiro na Entrega`;
+        if (delivery.change_for && delivery.change_for.trim()) {
+          msg += ` (Troco para ${delivery.change_for.trim()})\n`;
+        } else {
+          msg += ` (Sem troco)\n`;
+        }
+      } else {
+        msg += `Acertar na entrega\n`;
+      }
+    } else {
+      msg += `🏪 *MODALIDADE: RETIRADA NO BALCÃO*\n`;
+      msg += `📍 *Local:* Av. Londrina, 3464 - Ao lado Campus 3\n`;
+      msg += `👤 *Retirar em nome de:* ${delivery.customer_name || customerName}\n`;
+      if (delivery.phone) {
+        msg += `📞 *Contato:* ${delivery.phone}\n`;
+      }
+      msg += `💳 *Pagamento:* Acertar na retirada no balcão\n`;
+    }
+    msg += `─────────────────────────\n`;
+  }
+
   msg += `*ITENS DO PEDIDO:*\n\n`;
 
   items.forEach((item, index) => {

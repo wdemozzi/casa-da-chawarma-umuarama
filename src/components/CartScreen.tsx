@@ -1,10 +1,28 @@
 import React, { useState } from 'react';
-import { Trash2, Plus, Minus, X, MessageCircle, ArrowLeft, ShoppingBag, Gift, Check } from 'lucide-react';
+import {
+  Trash2,
+  Plus,
+  Minus,
+  X,
+  MessageCircle,
+  ArrowLeft,
+  ShoppingBag,
+  Gift,
+  Bike,
+  Store,
+  CreditCard,
+  Banknote,
+  QrCode,
+  MapPin,
+  Phone as PhoneIcon,
+  AlertCircle,
+} from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useMenu } from '../contexts/MenuContext';
 import { formatBRL } from '../lib/currency';
 import { buildWhatsAppMessage, getWhatsAppUrl, formatPhoneDigits } from '../lib/whatsapp';
 import { sounds } from '../lib/soundEffects';
+import { DeliveryDetails } from '../types/menu';
 
 interface CartScreenProps {
   onBackToMenu: () => void;
@@ -33,8 +51,25 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   } = useCart();
   const { settings } = useMenu();
 
+  // Order Details State
+  const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
   const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
   const [generalNotes, setGeneralNotes] = useState('');
+
+  // Delivery Address State
+  const [street, setStreet] = useState('');
+  const [number, setNumber] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [complement, setComplement] = useState('');
+  const [reference, setReference] = useState('');
+
+  // Payment on Delivery / Counter State
+  const [paymentMethod, setPaymentMethod] = useState<
+    'pix_entrega' | 'cartao_entrega' | 'dinheiro_entrega' | 'pix_balcao' | 'cartao_balcao' | 'dinheiro_balcao'
+  >('pix_entrega');
+  const [changeFor, setChangeFor] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleFinishOrder = () => {
@@ -46,16 +81,52 @@ export const CartScreen: React.FC<CartScreenProps> = ({
       return;
     }
 
+    // Validation
+    if (!customerName.trim()) {
+      setErrorMessage('Por favor, informe seu nome para identificar o pedido.');
+      return;
+    }
+
+    if (orderType === 'delivery') {
+      if (!street.trim()) {
+        setErrorMessage('Por favor, informe o nome da Rua/Avenida para a entrega.');
+        return;
+      }
+      if (!number.trim()) {
+        setErrorMessage('Por favor, informe o número da residência (ou "S/N").');
+        return;
+      }
+      if (!neighborhood.trim()) {
+        setErrorMessage('Por favor, informe o seu Bairro.');
+        return;
+      }
+    }
+
+    setErrorMessage('');
     sounds.playCelebration();
     setIsSubmitting(true);
 
+    const deliveryDetails: DeliveryDetails = {
+      order_type: orderType,
+      customer_name: customerName.trim(),
+      phone: phone.trim() || undefined,
+      street: orderType === 'delivery' ? street.trim() : undefined,
+      number: orderType === 'delivery' ? number.trim() : undefined,
+      neighborhood: orderType === 'delivery' ? neighborhood.trim() : undefined,
+      complement: orderType === 'delivery' && complement.trim() ? complement.trim() : undefined,
+      reference: orderType === 'delivery' && reference.trim() ? reference.trim() : undefined,
+      payment_method: paymentMethod,
+      change_for: paymentMethod === 'dinheiro_entrega' && changeFor.trim() ? changeFor.trim() : undefined,
+    };
+
     const message = buildWhatsAppMessage(
-      customerName,
+      customerName.trim(),
       items,
       subtotalCents,
       generalNotes,
       coupon,
-      discountCents
+      discountCents,
+      deliveryDetails
     );
     const url = getWhatsAppUrl(settings.official_whatsapp, message);
 
@@ -234,25 +305,308 @@ export const CartScreen: React.FC<CartScreenProps> = ({
       </div>
 
       {/* Checkout Form Details */}
-      <div className="p-4 rounded-2xl bg-[#14141a] border border-chawarma-border/60 space-y-3">
-        <h3 className="text-xs font-bold text-chawarma-gold uppercase tracking-wider">
-          Dados para Identificação
-        </h3>
-
-        <div className="space-y-1">
-          <label className="text-[11px] text-gray-300 block font-medium">
-            Seu Nome (para a comanda no balcão):
+      <div className="p-4 rounded-2xl bg-[#14141a] border border-chawarma-border/60 space-y-4">
+        {/* Modalidade de Atendimento: Entrega vs Balcão */}
+        <div>
+          <label className="text-[11px] font-bold text-chawarma-gold uppercase tracking-wider block mb-2">
+            Como deseja receber seu pedido?
           </label>
-          <input
-            type="text"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Ex: João da Silva"
-            className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
-          />
+          <div className="grid grid-cols-2 gap-2 p-1 bg-[#1a1a24] rounded-xl border border-chawarma-border">
+            <button
+              type="button"
+              onClick={() => {
+                setOrderType('delivery');
+                if (paymentMethod.endsWith('_balcao')) {
+                  setPaymentMethod('pix_entrega');
+                }
+              }}
+              className={`py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                orderType === 'delivery'
+                  ? 'bg-chawarma-gold text-black shadow-gold-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Bike className="w-4 h-4" />
+              <span>🛵 Entrega</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOrderType('pickup');
+                if (paymentMethod.endsWith('_entrega')) {
+                  setPaymentMethod('pix_balcao');
+                }
+              }}
+              className={`py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                orderType === 'pickup'
+                  ? 'bg-chawarma-gold text-black shadow-gold-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Store className="w-4 h-4" />
+              <span>🏪 Retirar no Balcão</span>
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-1">
+        {/* Informações Pessoais */}
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <label className="text-[11px] text-gray-300 block font-medium">
+              {orderType === 'delivery' ? 'Seu Nome Completo:' : 'Nome para Retirada no Balcão:'} <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={customerName}
+              onChange={(e) => {
+                setCustomerName(e.target.value);
+                if (errorMessage) setErrorMessage('');
+              }}
+              placeholder="Ex: João da Silva"
+              className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2.5 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] text-gray-300 block font-medium">
+              WhatsApp / Telefone para Contato:
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Ex: (44) 99999-8888"
+                className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl pl-9 pr-3 py-2.5 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+              />
+              <PhoneIcon className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Campos Específicos para Entrega (Delivery) */}
+        {orderType === 'delivery' ? (
+          <div className="space-y-2.5 pt-2 border-t border-chawarma-border/40">
+            <div className="flex items-center gap-1.5 text-chawarma-gold">
+              <MapPin className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wide">Endereço de Entrega</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[11px] text-gray-300 block font-medium">
+                  Rua / Avenida: <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={street}
+                  onChange={(e) => {
+                    setStreet(e.target.value);
+                    if (errorMessage) setErrorMessage('');
+                  }}
+                  placeholder="Ex: Av. Paraná"
+                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-gray-300 block font-medium">
+                  Número: <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={number}
+                  onChange={(e) => {
+                    setNumber(e.target.value);
+                    if (errorMessage) setErrorMessage('');
+                  }}
+                  placeholder="Ex: 1234"
+                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] text-gray-300 block font-medium">
+                  Bairro: <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={neighborhood}
+                  onChange={(e) => {
+                    setNeighborhood(e.target.value);
+                    if (errorMessage) setErrorMessage('');
+                  }}
+                  placeholder="Ex: Centro / Zona 2"
+                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-gray-300 block font-medium">
+                  Complemento (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={complement}
+                  onChange={(e) => setComplement(e.target.value)}
+                  placeholder="Ex: Apto 102, Bloco B"
+                  className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] text-gray-300 block font-medium">
+                Ponto de Referência (opcional):
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Ex: Próximo à praça / Ao lado da padaria"
+                className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
+              />
+            </div>
+          </div>
+        ) : (
+          /* Informações para Retirada no Balcão */
+          <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/30 space-y-1">
+            <div className="flex items-center gap-1.5 text-chawarma-gold text-xs font-bold">
+              <MapPin className="w-4 h-4" />
+              <span>Endereço para Retirada:</span>
+            </div>
+            <p className="text-xs text-white font-medium">
+              Av. Londrina, 3464 - Ao lado do Campus 3 (Umuarama - PR)
+            </p>
+            <p className="text-[10px] text-gray-400">
+              Seu pedido começará a ser preparado assim que você confirmar pelo WhatsApp!
+            </p>
+          </div>
+        )}
+
+        {/* Seção Forma de Pagamento */}
+        <div className="space-y-2 pt-2 border-t border-chawarma-border/40">
+          <label className="text-[11px] font-bold text-chawarma-gold uppercase tracking-wider block">
+            {orderType === 'delivery' ? 'Como vai acertar na entrega?' : 'Forma de pagamento no balcão:'}
+          </label>
+
+          {orderType === 'delivery' ? (
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('pix_entrega')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'pix_entrega'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <QrCode className="w-5 h-5 text-emerald-400" />
+                <span className="text-[10px] leading-tight">📱 Pix na Entrega</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cartao_entrega')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'cartao_entrega'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <CreditCard className="w-5 h-5 text-cyan-400" />
+                <span className="text-[10px] leading-tight">💳 Levar Maquininha</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('dinheiro_entrega')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'dinheiro_entrega'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <Banknote className="w-5 h-5 text-chawarma-gold" />
+                <span className="text-[10px] leading-tight">💵 Dinheiro</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('pix_balcao')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'pix_balcao'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <QrCode className="w-5 h-5 text-emerald-400" />
+                <span className="text-[10px] leading-tight">📱 Pix Balcão</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cartao_balcao')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'cartao_balcao'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <CreditCard className="w-5 h-5 text-cyan-400" />
+                <span className="text-[10px] leading-tight">💳 Cartão Balcão</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('dinheiro_balcao')}
+                className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                  paymentMethod === 'dinheiro_balcao'
+                    ? 'bg-amber-500/15 border-chawarma-gold text-white font-bold shadow-sm'
+                    : 'bg-[#1a1a24] border-chawarma-border/60 text-gray-400 hover:text-white'
+                }`}
+              >
+                <Banknote className="w-5 h-5 text-chawarma-gold" />
+                <span className="text-[10px] leading-tight">💵 Dinheiro Balcão</span>
+              </button>
+            </div>
+          )}
+
+          {/* Campo de Troco caso pague em dinheiro na entrega */}
+          {paymentMethod === 'dinheiro_entrega' && (
+            <div className="p-3 bg-[#1a1a24] rounded-xl border border-chawarma-border/80 space-y-2 mt-2">
+              <label className="text-[11px] text-gray-300 block font-medium">
+                Precisa de troco para quanto? (Deixe em branco se tiver o valor exato)
+              </label>
+              <input
+                type="text"
+                value={changeFor}
+                onChange={(e) => setChangeFor(e.target.value)}
+                placeholder="Ex: R$ 50,00 ou R$ 100,00"
+                className="w-full bg-[#14141c] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition font-mono"
+              />
+              <div className="flex gap-1.5">
+                {['Não preciso de troco', 'R$ 50,00', 'R$ 100,00'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => setChangeFor(sug === 'Não preciso de troco' ? '' : sug)}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-white/5 hover:bg-amber-500/20 text-gray-300 hover:text-amber-300 border border-white/10 transition"
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Observações Gerais */}
+        <div className="space-y-1 pt-2 border-t border-chawarma-border/40">
           <label className="text-[11px] text-gray-300 block font-medium">
             Observações Gerais do Pedido (opcional):
           </label>
@@ -260,10 +614,18 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             type="text"
             value={generalNotes}
             onChange={(e) => setGeneralNotes(e.target.value)}
-            placeholder="Ex: Pedido para viagem, talheres descartáveis..."
+            placeholder="Ex: Tocar o interfone, embalar bem quente..."
             className="w-full bg-[#1a1a24] text-xs text-white placeholder-gray-500 rounded-xl px-3 py-2 border border-chawarma-border focus:outline-none focus:border-chawarma-gold transition"
           />
         </div>
+
+        {/* Alerta de Validação */}
+        {errorMessage && (
+          <div className="p-3 bg-red-950/70 border border-red-500/60 rounded-xl flex items-center gap-2 text-red-300 text-xs font-semibold animate-pulse">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
       </div>
 
       {/* Subtotal & Total with Discount matching Screen 5 */}
@@ -289,7 +651,9 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
         <div className="flex justify-between text-xs text-gray-400">
           <span>Taxa de entrega / Retirada</span>
-          <span className="text-chawarma-goldLight">A combinar no WhatsApp</span>
+          <span className="text-chawarma-goldLight">
+            {orderType === 'delivery' ? 'A combinar no WhatsApp' : 'Retirada Grátis'}
+          </span>
         </div>
         <div className="border-t border-chawarma-border/40 pt-2 flex justify-between items-center">
           <span className="font-bold text-sm text-white">Total a Pagar</span>
@@ -306,11 +670,13 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         className="w-full py-3.5 px-4 rounded-2xl bg-chawarma-whatsapp hover:bg-chawarma-whatsappHover text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-whatsapp-glow transition-all active:scale-[0.98] disabled:opacity-60"
       >
         <MessageCircle className="w-5 h-5 fill-white stroke-none" />
-        <span>{isSubmitting ? 'Gerando mensagem...' : 'Finalizar pedido pelo WhatsApp'}</span>
+        <span>{isSubmitting ? 'Gerando pedido no WhatsApp...' : 'Confirmar e Enviar Pedido'}</span>
       </button>
 
       <p className="text-[11px] text-gray-500 text-center">
-        Você será redirecionado para o WhatsApp oficial para envio automático da sua comanda com seu brinde!
+        {orderType === 'delivery'
+          ? '🛵 O motoboy levará a maquininha ou chave Pix conforme escolhido!'
+          : '🏪 Seu pedido será preparado para retirada rápida no balcão!'}
       </p>
     </div>
   );

@@ -17,9 +17,12 @@ import {
   Layers,
   ArrowLeft,
   Star,
+  Gift,
+  Percent,
 } from 'lucide-react';
 import { useMenu } from '../contexts/MenuContext';
-import { Product, Category, ProductVariation, ProductAddon } from '../types/menu';
+import { Product, Category, ProductVariation, ProductAddon, WheelPrize } from '../types/menu';
+import { DEFAULT_WHEEL_PRIZES } from '../data/initialMenu';
 import { formatBRL } from '../lib/currency';
 
 interface AdminPanelProps {
@@ -50,7 +53,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
   const [pinError, setPinError] = useState(false);
 
   // Active Admin Sub-tab
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings' | 'audit'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'wheel' | 'settings' | 'audit'>('products');
+
+  // Roleta de Descontos State
+  const [wheelEnabled, setWheelEnabled] = useState<boolean>(settings.wheel_enabled ?? true);
+  const [wheelPrizes, setWheelPrizes] = useState<WheelPrize[]>(() => {
+    return settings.wheel_prizes && settings.wheel_prizes.length === 6
+      ? settings.wheel_prizes
+      : DEFAULT_WHEEL_PRIZES;
+  });
+  const [wheelSavedToast, setWheelSavedToast] = useState(false);
 
   // Search filter inside admin
   const [adminSearch, setAdminSearch] = useState('');
@@ -206,6 +218,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
     setTimeout(() => setSettingsSavedToast(false), 3000);
   };
 
+  const updateWheelPrize = (index: number, updates: Partial<WheelPrize>) => {
+    setWheelPrizes((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], ...updates };
+      return copy;
+    });
+  };
+
+  const handleSaveWheel = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSettings({
+      wheel_enabled: wheelEnabled,
+      wheel_prizes: wheelPrizes,
+    });
+    setWheelSavedToast(true);
+    setTimeout(() => setWheelSavedToast(false), 3000);
+  };
+
+  const handleResetDefaultWheel = () => {
+    if (confirm('Deseja restaurar as 6 fatias de desconto originais da roleta (R$ 3, 5%, R$ 5, 7%, R$ 7 e 10%)?')) {
+      setWheelPrizes(DEFAULT_WHEEL_PRIZES);
+      updateSettings({
+        wheel_prizes: DEFAULT_WHEEL_PRIZES,
+      });
+      setWheelSavedToast(true);
+      setTimeout(() => setWheelSavedToast(false), 3000);
+    }
+  };
+
   const handleCreateCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
@@ -339,6 +380,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
           }`}
         >
           Categorias ({categories.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('wheel')}
+          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg text-xs font-bold text-center transition ${
+            activeTab === 'wheel'
+              ? 'bg-chawarma-gold text-black shadow'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Roleta 🎁
         </button>
         <button
           onClick={() => setActiveTab('settings')}
@@ -584,6 +635,212 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToMenu }) => {
             })}
           </div>
         </div>
+      )}
+
+      {/* ================= TAB: CONFIGURAÇÕES DA ROLETA DE DESCONTOS ================= */}
+      {activeTab === 'wheel' && (
+        <form onSubmit={handleSaveWheel} className="space-y-4">
+          {/* Header Card Roleta */}
+          <div className="p-4 bg-gradient-to-br from-[#1c1810] to-[#14141e] rounded-2xl border border-amber-500/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center">
+                  <Gift className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Roleta de Descontos
+                  </h3>
+                  <p className="text-[10px] text-gray-400">Cupons promocionais automáticos</p>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-[11px] text-gray-300 font-medium">
+                  {wheelEnabled ? 'Ativada' : 'Pausada'}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={wheelEnabled}
+                  onChange={(e) => setWheelEnabled(e.target.checked)}
+                  className="w-5 h-5 rounded accent-amber-500 cursor-pointer"
+                />
+              </label>
+            </div>
+
+            <p className="text-[11px] text-gray-300 leading-relaxed">
+              Aqui você define os <strong>6 descontos</strong> da roleta que os clientes podem girar e ganhar no pedido.
+              Todas as fatias concedem descontos financeiros no carrinho e <strong>não doam comida inteira de graça</strong>, garantindo sua margem de lucro.
+            </p>
+          </div>
+
+          {/* Slices Configuration */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="text-xs font-bold text-chawarma-gold uppercase tracking-wider">
+                6 Fatias da Roleta
+              </h4>
+              <button
+                type="button"
+                onClick={handleResetDefaultWheel}
+                className="text-[10px] text-gray-400 hover:text-amber-400 flex items-center gap-1 transition underline"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restaurar Padrão</span>
+              </button>
+            </div>
+
+            {wheelPrizes.map((prize, idx) => (
+              <div
+                key={prize.id || idx}
+                className="p-3.5 bg-[#16161c] rounded-2xl border border-chawarma-border space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-chawarma-gold bg-black/40 px-2 py-0.5 rounded-lg border border-white/5">
+                      Fatia #{idx + 1}
+                    </span>
+                    <span className="text-base">{prize.icon}</span>
+                    <span className="text-xs font-bold text-white">{prize.label}</span>
+                  </div>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={prize.is_active}
+                      onChange={(e) => updateWheelPrize(idx, { is_active: e.target.checked })}
+                      className="rounded accent-amber-500"
+                    />
+                    <span>Ativa</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">
+                      Texto na Fatia (Curto):
+                    </label>
+                    <input
+                      type="text"
+                      value={prize.label}
+                      onChange={(e) => updateWheelPrize(idx, { label: e.target.value })}
+                      placeholder="Ex: R$ 5 OFF"
+                      className="w-full bg-[#181822] text-xs text-white rounded-xl px-2.5 py-1.5 border border-chawarma-border focus:border-chawarma-gold outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">
+                      Código do Cupom:
+                    </label>
+                    <input
+                      type="text"
+                      value={prize.code}
+                      onChange={(e) => updateWheelPrize(idx, { code: e.target.value.toUpperCase() })}
+                      placeholder="Ex: CHAWARMA-5OFF"
+                      className="w-full bg-[#181822] text-xs text-white rounded-xl px-2.5 py-1.5 border border-chawarma-border focus:border-chawarma-gold outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">
+                      Tipo de Desconto:
+                    </label>
+                    <select
+                      value={prize.discount_type}
+                      onChange={(e) =>
+                        updateWheelPrize(idx, {
+                          discount_type: e.target.value as 'fixed' | 'percent',
+                          discount_value: e.target.value === 'fixed' ? 500 : 5,
+                        })
+                      }
+                      className="w-full bg-[#181822] text-xs text-white rounded-xl px-2 py-1.5 border border-chawarma-border focus:border-chawarma-gold outline-none"
+                    >
+                      <option value="fixed">R$ Fixo no Pedido</option>
+                      <option value="percent">% Porcentagem</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">
+                      {prize.discount_type === 'fixed' ? 'Valor (em R$):' : 'Porcentagem (%):'}
+                    </label>
+                    <input
+                      type="number"
+                      step={prize.discount_type === 'fixed' ? '0.50' : '1'}
+                      min="1"
+                      value={
+                        prize.discount_type === 'fixed'
+                          ? (prize.discount_value / 100).toFixed(2)
+                          : prize.discount_value
+                      }
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        updateWheelPrize(idx, {
+                          discount_value:
+                            prize.discount_type === 'fixed' ? Math.round(val * 100) : Math.round(val),
+                        });
+                      }}
+                      className="w-full bg-[#181822] text-xs text-white rounded-xl px-2.5 py-1.5 border border-chawarma-border focus:border-chawarma-gold outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">
+                    Título de Exibição do Desconto:
+                  </label>
+                  <input
+                    type="text"
+                    value={prize.title}
+                    onChange={(e) => updateWheelPrize(idx, { title: e.target.value })}
+                    placeholder="Ex: R$ 5,00 de Desconto no Pedido"
+                    className="w-full bg-[#181822] text-xs text-white rounded-xl px-2.5 py-1.5 border border-chawarma-border focus:border-chawarma-gold outline-none"
+                  />
+                </div>
+
+                {/* Ícones Rápidos */}
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">
+                    Ícone da Fatia:
+                  </label>
+                  <div className="flex gap-1.5">
+                    {['🏷️', '⭐', '🔥', '✨', '🎁', '🎉', '💰', '🌯'].map((ico) => (
+                      <button
+                        key={ico}
+                        type="button"
+                        onClick={() => updateWheelPrize(idx, { icon: ico })}
+                        className={`text-sm p-1.5 rounded-lg border transition ${
+                          prize.icon === ico
+                            ? 'bg-amber-500/20 border-chawarma-gold scale-110'
+                            : 'bg-black/30 border-white/5 hover:border-white/20'
+                        }`}
+                      >
+                        {ico}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3.5 px-4 rounded-xl bg-chawarma-gold text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-gold-sm transition active:scale-95"
+          >
+            <Save className="w-4 h-4" />
+            <span>Salvar Configurações da Roleta</span>
+          </button>
+
+          {wheelSavedToast && (
+            <div className="p-3 bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs font-bold rounded-xl text-center">
+              ✓ Descontos da roleta salvos com sucesso!
+            </div>
+          )}
+        </form>
       )}
 
       {/* ================= TAB 3: CONFIGURAÇÕES E WHATSAPP ================= */}

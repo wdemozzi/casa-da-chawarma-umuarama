@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { X, Sparkles, Gift, Check, Flame } from 'lucide-react';
-import { Coupon } from '../types/menu';
+import React, { useState } from 'react';
+import { X, Sparkles, Gift, Check } from 'lucide-react';
+import { Coupon, WheelPrize } from '../types/menu';
 import { sounds } from '../lib/soundEffects';
 import { useCart } from '../contexts/CartContext';
+import { useMenu } from '../contexts/MenuContext';
+import { DEFAULT_WHEEL_PRIZES } from '../data/initialMenu';
 
 interface RewardWheelModalProps {
   isOpen: boolean;
@@ -10,69 +12,36 @@ interface RewardWheelModalProps {
   onCouponApplied: (coupon: Coupon) => void;
 }
 
-const SLICES: (Coupon & { label: string; icon: string; bg: string })[] = [
-  {
-    code: 'CHAWARMA-5OFF',
-    title: 'R$ 5,00 de Desconto no Pedido',
-    label: 'R$ 5 OFF',
-    discount_cents: 500,
-    icon: '🏷️',
-    bg: '#1a1811',
-  },
-  {
-    code: 'CHAWARMA-LATA-FREE',
-    title: '1x Refrigerante Lata Grátis',
-    label: 'Refri Grátis',
-    freebie_name: 'Refrigerante Lata Grátis',
-    icon: '🥤',
-    bg: '#251e10',
-  },
-  {
-    code: 'CHAWARMA-QUEIJO-FREE',
-    title: 'Adicional de Queijo Muçarela Grátis',
-    label: 'Queijo Extra',
-    freebie_name: 'Adicional de Queijo Grátis',
-    icon: '🧀',
-    bg: '#1a1811',
-  },
-  {
-    code: 'CHAWARMA-BATATA-FREE',
-    title: 'Porção de Batata Pequena Cortesia',
-    label: 'Batata Cortesia',
-    freebie_name: 'Batata Pequena Cortesia',
-    icon: '🍟',
-    bg: '#251e10',
-  },
-  {
-    code: 'CHAWARMA-ALHO-FREE',
-    title: 'Pote de Creme de Alho Especial Grátis',
-    label: 'Molho Alho',
-    freebie_name: 'Creme de Alho Libanês Grátis',
-    icon: '🧄',
-    bg: '#1a1811',
-  },
-  {
-    code: 'CHAWARMA-10OFF',
-    title: '10% de Desconto no Total',
-    label: '10% OFF',
-    discount_percent: 10,
-    icon: '⭐',
-    bg: '#251e10',
-  },
-];
-
 export const RewardWheelModal: React.FC<RewardWheelModalProps> = ({
   isOpen,
   onClose,
   onCouponApplied,
 }) => {
   const { coupon: activeCoupon, applyCoupon } = useCart();
+  const { settings } = useMenu();
+
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [wonCoupon, setWonCoupon] = useState<Coupon | null>(activeCoupon);
-  const [hasSpun, setHasSpun] = useState(Boolean(activeCoupon));
+  const [, setHasSpun] = useState(Boolean(activeCoupon));
 
-  const totalSlices = SLICES.length;
+  // Use configured prizes from admin panel, or fallback to default discounts
+  const rawPrizes: WheelPrize[] =
+    settings.wheel_prizes && settings.wheel_prizes.length >= 2
+      ? settings.wheel_prizes.filter((p) => p.is_active)
+      : DEFAULT_WHEEL_PRIZES;
+
+  const slices = rawPrizes.map((p, idx) => ({
+    code: p.code,
+    title: p.title,
+    label: p.label,
+    discount_cents: p.discount_type === 'fixed' ? p.discount_value : undefined,
+    discount_percent: p.discount_type === 'percent' ? p.discount_value : undefined,
+    icon: p.icon || '🏷️',
+    bg: idx % 2 === 0 ? '#1a1811' : '#251e10',
+  }));
+
+  const totalSlices = slices.length;
   const sliceAngle = 360 / totalSlices;
 
   const handleSpin = () => {
@@ -82,19 +51,16 @@ export const RewardWheelModal: React.FC<RewardWheelModalProps> = ({
     setIsSpinning(true);
     setWonCoupon(null);
 
-    // Pick a winning index (0 to 5)
+    // Pick a winning index
     const winningIndex = Math.floor(Math.random() * totalSlices);
-    const selected = SLICES[winningIndex];
+    const selected = slices[winningIndex];
 
-    // Calculate final rotation (at least 6 full spins = 2160 deg + target slice center)
-    // Pointer is at the top (270 deg / 0 deg depending on canvas; here top is 0 deg)
     const extraSpins = 360 * 6;
     const sliceCenter = winningIndex * sliceAngle + sliceAngle / 2;
     const targetRotation = rotation + extraSpins + (360 - sliceCenter);
 
     setRotation(targetRotation);
 
-    // Play ticking sound intervals
     let tickCount = 0;
     const tickInterval = setInterval(() => {
       tickCount++;
@@ -104,14 +70,19 @@ export const RewardWheelModal: React.FC<RewardWheelModalProps> = ({
       }
     }, 110);
 
-    // After spin finishes (4.5s)
     setTimeout(() => {
       clearInterval(tickInterval);
       setIsSpinning(false);
-      setWonCoupon(selected);
+      const couponObj: Coupon = {
+        code: selected.code,
+        title: selected.title,
+        discount_cents: selected.discount_cents,
+        discount_percent: selected.discount_percent,
+      };
+      setWonCoupon(couponObj);
       setHasSpun(true);
-      applyCoupon(selected);
-      onCouponApplied(selected);
+      applyCoupon(couponObj);
+      onCouponApplied(couponObj);
       sounds.playCelebration();
     }, 4500);
   };
@@ -139,9 +110,9 @@ export const RewardWheelModal: React.FC<RewardWheelModalProps> = ({
             <Gift className="w-3.5 h-3.5" />
             <span>Roleta da Sorte • Casa da Chawarma</span>
           </div>
-          <h3 className="text-lg font-black text-white">Gire & Ganhe Seu Brinde</h3>
+          <h3 className="text-lg font-black text-white">Gire & Ganhe Seu Desconto</h3>
           <p className="text-[11px] text-gray-300">
-            Cada cliente ganha um brinde ou desconto exclusivo para aplicar no pedido pelo WhatsApp!
+            Cada cliente ganha um cupom de desconto exclusivo para aplicar no pedido pelo WhatsApp!
           </p>
         </div>
 
@@ -163,7 +134,7 @@ export const RewardWheelModal: React.FC<RewardWheelModalProps> = ({
                 transitionTimingFunction: 'cubic-bezier(0.15, 0.9, 0.2, 1)',
               }}
             >
-              {SLICES.map((slice, i) => {
+              {slices.map((slice, i) => {
                 const angle = i * sliceAngle;
                 return (
                   <div

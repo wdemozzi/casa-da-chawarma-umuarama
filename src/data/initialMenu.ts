@@ -1,4 +1,67 @@
-import { Category, Product, RestaurantSettings } from '../types/menu';
+import { Category, Product, RestaurantSettings, WheelPrize } from '../types/menu';
+
+export const DEFAULT_WHEEL_PRIZES: WheelPrize[] = [
+  {
+    id: 'prize-1',
+    label: 'R$ 3 OFF',
+    title: 'R$ 3,00 de Desconto no Pedido',
+    code: 'CHAWARMA-3OFF',
+    discount_type: 'fixed',
+    discount_value: 300,
+    icon: '🏷️',
+    is_active: true,
+  },
+  {
+    id: 'prize-2',
+    label: '5% OFF',
+    title: '5% de Desconto no Pedido',
+    code: 'CHAWARMA-5OFF-PCT',
+    discount_type: 'percent',
+    discount_value: 5,
+    icon: '⭐',
+    is_active: true,
+  },
+  {
+    id: 'prize-3',
+    label: 'R$ 5 OFF',
+    title: 'R$ 5,00 de Desconto no Pedido',
+    code: 'CHAWARMA-5OFF',
+    discount_type: 'fixed',
+    discount_value: 500,
+    icon: '🔥',
+    is_active: true,
+  },
+  {
+    id: 'prize-4',
+    label: '7% OFF',
+    title: '7% de Desconto no Pedido',
+    code: 'CHAWARMA-7OFF',
+    discount_type: 'percent',
+    discount_value: 7,
+    icon: '✨',
+    is_active: true,
+  },
+  {
+    id: 'prize-5',
+    label: 'R$ 7 OFF',
+    title: 'R$ 7,00 de Desconto no Pedido',
+    code: 'CHAWARMA-7OFF',
+    discount_type: 'fixed',
+    discount_value: 700,
+    icon: '🏷️',
+    is_active: true,
+  },
+  {
+    id: 'prize-6',
+    label: '10% OFF',
+    title: '10% de Desconto no Total',
+    code: 'CHAWARMA-10OFF',
+    discount_type: 'percent',
+    discount_value: 10,
+    icon: '🎉',
+    is_active: true,
+  },
+];
 
 export const INITIAL_SETTINGS: RestaurantSettings = {
   name: 'Casa da Chawarma Umuarama',
@@ -11,6 +74,8 @@ export const INITIAL_SETTINGS: RestaurantSettings = {
   instagram: '@casadachawarmaumuarama',
   banner_image_url: 'https://images.unsplash.com/photo-1561651823-34feb02250e4?auto=format&fit=crop&w=1200&q=85',
   admin_pin: '1234',
+  wheel_enabled: true,
+  wheel_prizes: DEFAULT_WHEEL_PRIZES,
 };
 
 export const INITIAL_CATEGORIES: Category[] = [

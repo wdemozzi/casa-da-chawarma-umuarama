@@ -53,7 +53,16 @@ export const menuStorage = {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (data) {
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+        return {
+          ...INITIAL_SETTINGS,
+          ...parsed,
+          wheel_enabled: parsed.wheel_enabled !== undefined ? parsed.wheel_enabled : true,
+          wheel_prizes:
+            parsed.wheel_prizes && parsed.wheel_prizes.length > 0
+              ? parsed.wheel_prizes
+              : INITIAL_SETTINGS.wheel_prizes,
+        };
       }
     } catch (e) {
       console.error('Error loading settings from localStorage:', e);
