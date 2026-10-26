@@ -213,6 +213,21 @@ export const CartScreen: React.FC<CartScreenProps> = ({
     );
     const url = getWhatsAppUrl(settings.official_whatsapp, message);
 
+    // Save only real orders to localStorage for genuine social proof
+    try {
+      const realOrder = {
+        id: `real-${Date.now()}`,
+        name: customerName.trim().split(' ')[0], // First name only
+        neighborhood: orderType === 'delivery' ? (neighborhood.trim() || 'Entrega') : 'Retirada no Balcão',
+        productName: items.map((i) => `${i.quantity}x ${i.product.name}`).slice(0, 2).join(' + '),
+        timestamp: Date.now(),
+        image_url: items[0]?.product.image_url,
+      };
+      const existing = JSON.parse(localStorage.getItem('chawarma_real_orders') || '[]');
+      existing.unshift(realOrder);
+      localStorage.setItem('chawarma_real_orders', JSON.stringify(existing.slice(0, 5)));
+    } catch {}
+
     // Open WhatsApp in new tab/app
     window.open(url, '_blank');
 

@@ -1,65 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, X, ShoppingBag, CheckCircle2 } from 'lucide-react';
+import { Flame, X, ShoppingBag } from 'lucide-react';
 import { Product } from '../types/menu';
 import { sounds } from '../lib/soundEffects';
 
-interface SocialProofItem {
+interface RealOrderItem {
   id: string;
   name: string;
   neighborhood: string;
   productName: string;
-  timeAgo: string;
-  matchedProductName: string;
-  avatarText: string;
+  timestamp: number;
+  image_url?: string;
 }
-
-const NOTIFICATIONS: SocialProofItem[] = [
-  {
-    id: 'sp-1',
-    name: 'Carlos M.',
-    neighborhood: 'Campus 3',
-    productName: '2x Chawarma Especial de Alcatra',
-    timeAgo: 'há 3 minutos',
-    matchedProductName: 'Chawarma de Alcatra',
-    avatarText: 'CM',
-  },
-  {
-    id: 'sp-2',
-    name: 'Larissa R.',
-    neighborhood: 'Jardim Panorama',
-    productName: 'Batata c/ Queijo & Bacon',
-    timeAgo: 'há 6 minutos',
-    matchedProductName: 'Batata com queijo e bacon',
-    avatarText: 'LR',
-  },
-  {
-    id: 'sp-3',
-    name: 'Marcos V.',
-    neighborhood: 'Centro',
-    productName: 'Chawarma Tradicional de Frango',
-    timeAgo: 'há 9 minutos',
-    matchedProductName: 'Chawarma de Frango',
-    avatarText: 'MV',
-  },
-  {
-    id: 'sp-4',
-    name: 'Fernanda S.',
-    neighborhood: 'Zona 2',
-    productName: 'Chawarma Misto com Queijo Extra',
-    timeAgo: 'há 12 minutos',
-    matchedProductName: 'Chawarma Misto',
-    avatarText: 'FS',
-  },
-  {
-    id: 'sp-5',
-    name: 'Lucas B.',
-    neighborhood: 'Parque San Remo',
-    productName: 'X-Bacon Egg Prensado + Refrigerante',
-    timeAgo: 'há 15 minutos',
-    matchedProductName: 'X-Bacon Egg',
-    avatarText: 'LB',
-  },
-];
 
 interface LiveSocialProofProps {
   products: Product[];
@@ -70,40 +21,52 @@ export const LiveSocialProof: React.FC<LiveSocialProofProps> = ({
   products,
   onSelectProduct,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [realOrder, setRealOrder] = useState<RealOrderItem | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    if (isDismissed) return;
+    try {
+      const stored = localStorage.getItem('chawarma_real_orders');
+      if (!stored) return;
 
-    // Initial appearance after 4 seconds
-    const initialTimer = setTimeout(() => {
-      setIsVisible(true);
-    }, 4000);
+      const orders: RealOrderItem[] = JSON.parse(stored);
+      if (!Array.isArray(orders) || orders.length === 0) return;
 
-    // Rotate every 15 seconds
-    const interval = setInterval(() => {
-      setIsVisible(false);
-      setTimeout(() => {
-        setCurrentIndex((prev) => (prev + 1) % NOTIFICATIONS.length);
-        setIsVisible(true);
-      }, 1000);
-    }, 15000);
+      // Only consider real orders placed within the last 4 hours
+      const now = Date.now();
+      const recent = orders.find((o) => now - o.timestamp < 4 * 60 * 60 * 1000);
 
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(interval);
-    };
-  }, [isDismissed]);
+      if (recent) {
+        setRealOrder(recent);
+        // Show after 6 seconds
+        const timer = setTimeout(() => {
+          setIsVisible(true);
+        }, 6000);
 
-  if (isDismissed || !isVisible) return null;
+        // Auto-hide after 8 seconds (no infinite repetition)
+        const hideTimer = setTimeout(() => {
+          setIsVisible(false);
+        }, 14000);
 
-  const current = NOTIFICATIONS[currentIndex];
-  const matchedProd = products.find(
-    (p) =>
-      p.name.toLowerCase().includes(current.matchedProductName.toLowerCase()) ||
-      current.matchedProductName.toLowerCase().includes(p.name.toLowerCase())
+        return () => {
+          clearTimeout(timer);
+          clearTimeout(hideTimer);
+        };
+      }
+    } catch {
+      setRealOrder(null);
+    }
+  }, []);
+
+  if (isDismissed || !isVisible || !realOrder) return null;
+
+  // Format relative time for the real order
+  const minutesAgo = Math.max(1, Math.floor((Date.now() - realOrder.timestamp) / 60000));
+  const timeText = minutesAgo <= 1 ? 'há poucos instantes' : `há ${minutesAgo} min`;
+
+  const matchedProd = products.find((p) =>
+    realOrder.productName.toLowerCase().includes(p.name.toLowerCase())
   );
 
   const handleClickItem = () => {
@@ -116,18 +79,18 @@ export const LiveSocialProof: React.FC<LiveSocialProofProps> = ({
   return (
     <div className="fixed bottom-22 sm:bottom-24 left-3 sm:left-6 z-50 max-w-[320px] animate-fadeIn select-none pointer-events-auto">
       <div className="relative p-3 rounded-2xl bg-[#14141e]/95 backdrop-blur-xl border border-chawarma-gold/30 shadow-2xl flex items-center gap-3">
-        {/* Glow indicator */}
+        {/* Real Product Image or Badge */}
         <div className="relative flex-shrink-0">
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-chawarma-gold to-amber-500 p-[2px]">
-            {matchedProd?.image_url ? (
+            {realOrder.image_url || matchedProd?.image_url ? (
               <img
-                src={matchedProd.image_url}
+                src={realOrder.image_url || matchedProd?.image_url}
                 alt=""
                 className="w-full h-full object-cover rounded-full"
               />
             ) : (
               <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-xs font-bold text-chawarma-gold">
-                {current.avatarText}
+                {realOrder.name.slice(0, 2).toUpperCase()}
               </div>
             )}
           </div>
@@ -137,27 +100,27 @@ export const LiveSocialProof: React.FC<LiveSocialProofProps> = ({
 
         {/* Content */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={handleClickItem}>
-          <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold uppercase tracking-wider">
-            <Flame className="w-3 h-3 text-chawarma-gold animate-pulse" />
-            <span>Fornada Saindo • {current.timeAgo}</span>
+          <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+            <Flame className="w-3 h-3 text-chawarma-gold" />
+            <span>Pedido Real Confirmado • {timeText}</span>
           </div>
 
           <p className="text-xs font-bold text-white truncate">
-            {current.productName}
+            {realOrder.productName}
           </p>
 
           <p className="text-[10px] text-gray-400 truncate">
-            {current.name} • {current.neighborhood}
+            {realOrder.name} • {realOrder.neighborhood}
           </p>
         </div>
 
-        {/* Action Button & Dismiss */}
+        {/* Close button */}
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsDismissed(true)}
             className="text-gray-500 hover:text-white p-0.5 rounded transition"
-            aria-label="Fechar notificação"
+            aria-label="Fechar aviso"
           >
             <X className="w-3.5 h-3.5" />
           </button>
